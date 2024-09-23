@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Booking Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        #chat-window {
+            margin: 50px auto;
+            width: 400px;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        #messages {
+            border: 1px solid #ddd;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+        #user-input {
+            width: calc(100% - 60px);
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        button {
+            padding: 10px;
+            margin-left: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div id="chat-window">
+        <h2>Hotel Booking Chatbot</h2>
+        <div id="messages">
+            <p><strong>Bot:</strong> Welcome to the Hotel Booking Service! How can I assist you today?</p>
+        </div>
+        <input type="text" id="user-input" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+        // Function to handle the Enter key press event
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();  // Trigger sendMessage function on Enter key press
+            }
+        }
+
+        // Function to send user message to the server and handle bot response
+        function sendMessage() {
+            var userMessage = $("#user-input").val().trim();
+            if (userMessage === "") {
+                alert("Please enter a message.");
+                return;
+            }
+
+            // Display user message in chat window
+            $("#messages").append("<p><strong>You:</strong> " + userMessage + "</p>");
+            $("#user-input").val("");  // Clear the input field
+
+            // Send user message to the Flask server via AJAX
+            $.ajax({
+                url: "/chat",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ "text": userMessage }),
+                success: function(response) {
+                    // Display bot response in chat window
+                    $("#messages").append("<p><strong>Bot:</strong> " + response.response + "</p>");
+                    // Scroll to the bottom of the chat window
+                    $("#messages").scrollTop($("#messages")[0].scrollHeight);
+                },
+                error: function(xhr, status, error) {
+                    // Handle error response
+                    $("#messages").append("<p><strong>Bot:</strong> Sorry, there was an error processing your request.</p>");
+                }
+            });
+        }
+    </script>
+</body>
+</html>
