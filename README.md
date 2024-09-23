@@ -85,4 +85,4 @@ Database
 The application uses an SQLite database to store booking details, such as the user's selected room type, check-in and check-out dates, and the number of guests. The database is created automatically the first time the Docker container is run.
 
 
-You can view the App UI [here](https://raw.githubusercontent.com/your-username/hotel_booking_app/main/Hotel Booking Chatbot.html).
+You can download the html file - Hotel Booking Chatbot.html and view it in your browser to see how it look quickly
