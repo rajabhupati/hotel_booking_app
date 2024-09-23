@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<!-- saved from url=(0022)http://127.0.0.1:5001/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Booking Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        #chat-window {
+            margin: 50px auto;
+            width: 400px;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        #messages {
+            border: 1px solid #ddd;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+        #user-input {
+            width: calc(100% - 60px);
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        button {
+            padding: 10px;
+            margin-left: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+    <script src="./Hotel Booking Chatbot_files/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div id="chat-window">
+        <h2>Hotel Booking Chatbot</h2>
+        <div id="messages">
+            <p><strong>Bot:</strong> Welcome to the Hotel Booking Service! How can I assist you today?</p>
+        <p><strong>You:</strong> book room</p><p><strong>Bot:</strong> We have the following room options available:
+Standard: $100.0 per night
+Deluxe: $150.0 per night
+Suite: $200.0 per night
+Please select a room type.</p><p><strong>You:</strong> Deluxe</p><p><strong>Bot:</strong> You selected Deluxe for $150.0 per night. When would you like to check in? Please provide a valid date (e.g., 23-09-2024).</p><p><strong>You:</strong> today</p><p><strong>Bot:</strong> Please provide a valid check-in date (e.g., 23-09-2024).</p><p><strong>You:</strong> 23-09-2024</p><p><strong>Bot:</strong> Got it! Now, what is your check-out date? Please provide a valid date (e.g., 24-09-2024).</p><p><strong>You:</strong> 24-09-2024</p><p><strong>Bot:</strong> How many guests will be staying?</p><p><strong>You:</strong> 3</p><p><strong>Bot:</strong> Thank you! Your room is booked from 23-09-2024 to 24-09-2024 for 3 guests in a Deluxe room at $150.0 per night.</p></div>
+        <input type="text" id="user-input" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+        // Function to handle the Enter key press event
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();  // Trigger sendMessage function on Enter key press
+            }
+        }
+
+        // Function to send user message to the server and handle bot response
+        function sendMessage() {
+            var userMessage = $("#user-input").val().trim();
+            if (userMessage === "") {
+                alert("Please enter a message.");
+                return;
+            }
+
+            // Display user message in chat window
+            $("#messages").append("<p><strong>You:</strong> " + userMessage + "</p>");
+            $("#user-input").val("");  // Clear the input field
+
+            // Send user message to the Flask server via AJAX
+            $.ajax({
+                url: "/chat",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ "text": userMessage }),
+                success: function(response) {
+                    // Display bot response in chat window
+                    $("#messages").append("<p><strong>Bot:</strong> " + response.response + "</p>");
+                    // Scroll to the bottom of the chat window
+                    $("#messages").scrollTop($("#messages")[0].scrollHeight);
+                },
+                error: function(xhr, status, error) {
+                    // Handle error response
+                    $("#messages").append("<p><strong>Bot:</strong> Sorry, there was an error processing your request.</p>");
+                }
+            });
+        }
+    </script>
+
+</body></html>
