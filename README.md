@@ -24,7 +24,8 @@ First, clone the repository to your local machine:
 
 ```
 git clone https://github.com/your-username/hotel-booking-chatbot.git
-cd hotel-booking-chatbot ```
+cd hotel-booking-chatbot
+```
 
 
 2. Build the Docker Image
