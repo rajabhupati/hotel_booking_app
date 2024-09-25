@@ -22,21 +22,21 @@ Before you begin, ensure you have the following installed:
 
 First, clone the repository to your local machine:
 
-```bash
+```
 git clone https://github.com/your-username/hotel-booking-chatbot.git
-cd hotel-booking-chatbot
+cd hotel-booking-chatbot ```
 
 
 2. Build the Docker Image
 Next, build the Docker image for the Flask application:
 
-docker build -t hotelbooking:latest .
+```docker build -t hotelbooking:latest .```
 
 
 This command will create a Docker image named hotelbooking based on the Dockerfile.
 
 3. Run the Docker Container using the following command
-docker run -p 5001:5000 hotelbooking
+```docker run -p 5001:5000 hotelbooking```
 To run the Flask application in a Docker container:
 
 This will start the Flask app inside the container and expose it on port 5000.
