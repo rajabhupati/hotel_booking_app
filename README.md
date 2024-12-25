@@ -87,3 +87,13 @@ The application uses an SQLite database to store booking details, such as the us
 
 
 You can download the html file - Hotel Booking Chatbot.html and view it in your browser to see how it look quickly
+
+To Build Image : 
+
+docker build --no-cache -t hotel_booking_app .
+
+To run the Image
+
+docker run -d -p 5001:5001 -v /Users/<id>/Downloads/hotel_booking_app-main/app:/app hotel_booking_app
+
+
