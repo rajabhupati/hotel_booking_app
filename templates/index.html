@@ -43,6 +43,17 @@
         button:hover {
             background-color: #0056b3;
         }
+        .feedback-buttons {
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .feedback-button {
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 5px 10px;
+            margin-right: 5px;
+            cursor: pointer;
+        }
     </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
@@ -57,14 +68,12 @@
     </div>
 
     <script>
-        // Function to handle the Enter key press event
         function handleKeyPress(event) {
             if (event.key === 'Enter') {
-                sendMessage();  // Trigger sendMessage function on Enter key press
+                sendMessage();
             }
         }
 
-        // Function to send user message to the server and handle bot response
         function sendMessage() {
             var userMessage = $("#user-input").val().trim();
             if (userMessage === "") {
@@ -72,25 +81,40 @@
                 return;
             }
 
-            // Display user message in chat window
             $("#messages").append("<p><strong>You:</strong> " + userMessage + "</p>");
-            $("#user-input").val("");  // Clear the input field
+            $("#user-input").val("");
 
-            // Send user message to the Flask server via AJAX
             $.ajax({
                 url: "/chat",
                 type: "POST",
                 contentType: "application/json",
                 data: JSON.stringify({ "text": userMessage }),
                 success: function(response) {
-                    // Display bot response in chat window
-                    $("#messages").append("<p><strong>Bot:</strong> " + response.response + "</p>");
-                    // Scroll to the bottom of the chat window
+                    var botResponse = "<p><strong>Bot:</strong> " + response.response + 
+                        "<span class='feedback-buttons'>" +
+                        "<button class='feedback-button' onclick='sendFeedback(\"positive\")'>👍</button>" +
+                        "<button class='feedback-button' onclick='sendFeedback(\"negative\")'>👎</button>" +
+                        "</span></p>";
+                    $("#messages").append(botResponse);
                     $("#messages").scrollTop($("#messages")[0].scrollHeight);
                 },
                 error: function(xhr, status, error) {
-                    // Handle error response
                     $("#messages").append("<p><strong>Bot:</strong> Sorry, there was an error processing your request.</p>");
+                }
+            });
+        }
+
+        function sendFeedback(feedback) {
+            $.ajax({
+                url: "/chat",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ "feedback": feedback }),
+                success: function(response) {
+                    console.log("Feedback sent:", response);
+                },
+                error: function(xhr, status, error) {
+                    console.error("Error sending feedback:", error);
                 }
             });
         }
