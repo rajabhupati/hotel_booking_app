@@ -1,175 +1,201 @@
 import sqlite3
 from flask import Flask, request, jsonify, render_template
-from nltk.tokenize import word_tokenize
-import re
-import nltk
+import spacy
+from spacy.cli import download
+from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+import joblib
+import os
+import logging
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# Download required NLTK data
-nltk.download('punkt')
+# Set up logging
+logging.basicConfig(filename='/app/chatbot.log', level=logging.INFO)
 
-# Track the state of the conversation
-conversation_state = {}
+# Download and load spaCy model
+download("en_core_web_sm")
+nlp = spacy.load("en_core_web_sm")
 
-# Function to initialize the SQLite database
-def init_db():
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
+# Define the path for storing the model
+MODEL_PATH = '/app/intent_pipeline.joblib'
 
-    # Create table if it doesn't exist
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            check_in TEXT,
-            check_out TEXT,
-            guests INTEGER,
-            room_type TEXT,
-            room_price REAL,
-            status TEXT
-        )
-    ''')
+# Function to initialize or load the model
+def init_model():
+    global intent_pipeline
+    if os.path.exists(MODEL_PATH):
+        intent_pipeline = joblib.load(MODEL_PATH)
+    else:
+        # Initialize with expanded sample intents
+        training_data = [
+            ("I want to book a room", "book_room"),
+            ("Can I extend my stay?", "extend_stay"),
+            ("What are your room types?", "room_info"),
+            ("I need to cancel my booking", "cancel_booking"),
+            ("How much does a suite cost?", "room_info"),
+            ("I want to change my check-out date", "extend_stay"),
+            ("Book a deluxe room for me", "book_room"),
+            ("Can you tell me about your rooms?", "room_info"),
+            ("I need to extend my stay by 2 nights", "extend_stay"),
+            ("Cancel my reservation", "cancel_booking"),
+            ("Extend my stay for 3 more nights", "extend_stay"),
+            ("I want to stay an extra night", "extend_stay"),
+            ("Can I add 2 more nights to my booking?", "extend_stay"),
+            ("I need to extend my stay until next Friday", "extend_stay"),
+            ("Please extend my stay by one day", "extend_stay"),
+            ("I want to book a suite", "book_room"),
+            ("What is the price of a deluxe room?", "room_info"),
+            ("Can I book a room for 2 nights?", "book_room"),
+            ("I need to extend my stay for 5 days", "extend_stay"),
+            ("Extend my booking to include the weekend", "extend_stay"),
+            ("Can you extend my stay by 4 nights?", "extend_stay"),
+            ("I want to extend my stay for another week", "extend_stay"),
+            ("Add 3 more nights to my booking", "extend_stay"),
+            ("Can I extend my stay to next Monday?", "extend_stay"),
+            ("I need to extend my stay for 2 more days", "extend_stay"),
+            ("Extend my booking by 1 night", "extend_stay"),
+            ("Can you extend my stay for 2 additional nights?", "extend_stay"),
+            ("I want to extend my stay until the weekend", "extend_stay")
+        ]
+        X_train, y_train = zip(*training_data)
+        
+        intent_pipeline = Pipeline([
+            ('tfidf', TfidfVectorizer(stop_words='english')),
+            ('classifier', LogisticRegression(max_iter=1000))
+        ])
+        intent_pipeline.fit(X_train, y_train)
+        save_model()
 
-    # Create rooms table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS rooms (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            room_type TEXT,
-            price REAL
-        )
-    ''')
+# Function to save the model
+def save_model():
+    joblib.dump(intent_pipeline, MODEL_PATH)
 
-    # Insert room types with prices (if not already present)
-    cursor.execute('SELECT COUNT(*) FROM rooms')
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO rooms (room_type, price) VALUES ('Standard', 100.0)")
-        cursor.execute("INSERT INTO rooms (room_type, price) VALUES ('Deluxe', 150.0)")
-        cursor.execute("INSERT INTO rooms (room_type, price) VALUES ('Suite', 200.0)")
+# Function to predict intent
+def predict_intent(user_input):
+    return intent_pipeline.predict([user_input])[0]
 
-    conn.commit()
-    conn.close()
+# Function to update the model with new intent
+def update_model_with_intent(user_input, intent):
+    global intent_pipeline
+    X_train, y_train = zip(*intent_pipeline.steps[0][1].vocabulary_.items())
+    X_train += (user_input,)
+    y_train += (intent,)
+    intent_pipeline.fit(X_train, y_train)
+    save_model()
 
-# Function to get room options
-def get_room_options():
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
-
-    cursor.execute('SELECT room_type, price FROM rooms')
-    rooms = cursor.fetchall()
-
-    conn.close()
-    return rooms
-
-# Function to add a new booking to the database
-def add_booking(user_id, check_in, check_out, guests, room_type, room_price):
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        INSERT INTO bookings (user_id, check_in, check_out, guests, room_type, room_price, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, check_in, check_out, guests, room_type, room_price, 'booked'))
-
-    conn.commit()
-    conn.close()
-
-# Function to extract and validate dates
-def extract_date(text):
-    date_pattern = re.compile(r'\d{2}[-/]\d{2}[-/]\d{4}')
-    date_match = date_pattern.search(text)
+# Function to extract entities using spaCy
+def extract_entities(text):
+    doc = nlp(text)
+    entities = {
+        'DATE': [],
+        'CARDINAL': [],
+        'ROOM_TYPE': []
+    }
+    room_types = [room[0].lower() for room in get_room_options()]
     
-    if date_match:
-        return date_match.group()
-    return None
-
-# Function to extract guests count
-def extract_guests(text):
-    number_pattern = re.compile(r'\d+')
-    number_match = number_pattern.search(text)
+    for ent in doc.ents:
+        if ent.label_ == 'DATE':
+            entities['DATE'].append(ent.text)
+        elif ent.label_ == 'CARDINAL':
+            entities['CARDINAL'].append(ent.text)
     
-    if number_match:
-        return number_match.group()
-    return None
+    for token in doc:
+        if token.text.lower() in room_types:
+            entities['ROOM_TYPE'].append(token.text.lower())
+    
+    return entities
 
-# Route to render the UI
-@app.route('/')
-def index():
-    return render_template('index.html')
+# Function to generate response based on user input and conversation state
+def generate_response(user_input, state):
+    intent = predict_intent(user_input)
+    entities = extract_entities(user_input)
+    logging.info(f"Predicted intent: {intent}")
+    logging.info(f"Extracted entities: {entities}")
+    logging.info(f"Current state: {state}")
 
-# Chatbot route with sequential flow for room selection, booking, and date validation
+    if 'history' not in state:
+        state['history'] = []
+    state['history'].append(user_input)
+
+    # Check if there's an existing booking
+    existing_booking = all(key in state for key in ['room_type', 'check_in', 'check_out', 'guests', 'room_price'])
+
+    if intent == "extend_stay" or "extend" in user_input.lower():
+        if existing_booking:
+            state["step"] = "extend_stay"
+            return (f"Certainly! I'd be happy to help you extend your stay in the {state['room_type']} room. "
+                    f"Your current booking is from {state['check_in']} to {state['check_out']}. "
+                    "How many additional nights would you like to book?")
+        else:
+            return "I'd be happy to help you extend your stay, but I couldn't find an existing booking. Could you please provide your current booking details or make a new reservation first?"
+
+    elif state["step"] == "extend_stay":
+        if entities['CARDINAL']:
+            nights = int(entities['CARDINAL'][0])
+            current_checkout = datetime.strptime(state["check_out"], "%d-%m-%Y")
+            new_checkout = (current_checkout + timedelta(days=nights)).strftime("%d-%m-%Y")
+            additional_price = state["room_price"] * nights
+            add_booking(state["user_id"], state["check_out"], new_checkout, state["guests"], state["room_type"], additional_price, is_extension=True)
+            state["check_out"] = new_checkout
+            return (f"Great! I've extended your stay for {nights} more nights. Your new check-out date will be {new_checkout}, "
+                    f"and the additional cost is ${additional_price}. Your total stay is now from {state['check_in']} to {new_checkout}. "
+                    "Is there anything else I can help you with?")
+        else:
+            return "I'm sorry, I didn't catch the number of nights. Could you please tell me how many additional nights you'd like to stay?"
+
+    elif intent == "book_room" or (not existing_booking and state["step"] == "greeting"):
+        rooms = get_room_options()
+        response = "Great! Here are our available room types:\n\n"
+        for room in rooms:
+            response += f"• {room[0]}: ${room[1]} per night\n"
+        response += "\nWhich type of room would you prefer?"
+        state["step"] = "room_selection"
+        return response
+
+    elif intent == "room_info":
+        rooms = get_room_options()
+        response = "Here's information about our room types:\n\n"
+        for room in rooms:
+            response += f"• {room[0]}: ${room[1]} per night\n"
+        return response
+
+    elif existing_booking:
+        return (f"Your current booking is a {state['room_type']} room from {state['check_in']} to {state['check_out']} "
+                f"for {state['guests']} guests at ${state['room_price']} per night. "
+                "How can I assist you further? You can ask to extend your stay or inquire about other services.")
+
+    else:
+        return "How can I assist you today? You can ask about booking a room, extending your stay, or inquire about our room types."
+
+# Chatbot route with NLP-based flow and feedback mechanism
 @app.route('/chat', methods=['POST'])
 def chat():
-    user_id = request.remote_addr  # Use the user's IP address as a session ID
+    user_id = request.remote_addr
     text = request.json.get('text')
-
-    # Initialize state if it's the first time interacting
+    feedback = request.json.get('feedback')
+    
     if user_id not in conversation_state:
-        conversation_state[user_id] = {"step": "choose_room", "check_in": None, "check_out": None, "guests": None, "room_type": None, "room_price": None}
-
+        conversation_state[user_id] = {"step": "greeting", "check_in": None, "check_out": None, "guests": None, "room_type": None, "room_price": None, "user_id": user_id}
+    
     state = conversation_state[user_id]
-    response = ""
-
-    # Ask user to choose a room type
-    if state["step"] == "choose_room":
-        rooms = get_room_options()
-        response = "We have the following room options available:\n"
-        for room in rooms:
-            response += f"{room[0]}: ${room[1]} per night\n"
-        response += "Please select a room type."
-        state["step"] = "room_selection"
-
-    # Handle room selection
-    elif state["step"] == "room_selection":
-        rooms = get_room_options()
-        room_dict = {room[0].lower(): room[1] for room in rooms}
-        selected_room = text.lower()
-
-        if selected_room in room_dict:
-            state["room_type"] = selected_room.capitalize()
-            state["room_price"] = room_dict[selected_room]
-            response = f"You selected {state['room_type']} for ${state['room_price']} per night. When would you like to check in? Please provide a valid date (e.g., 23-09-2024)."
-            state["step"] = "check_in"
-        else:
-            response = "Please select a valid room type from the list."
-
-    # Handle check-in date
-    elif state["step"] == "check_in":
-        check_in = extract_date(text)
-        if check_in:
-            state["check_in"] = check_in
-            response = "Got it! Now, what is your check-out date? Please provide a valid date (e.g., 24-09-2024)."
-            state["step"] = "check_out"
-        else:
-            response = "Please provide a valid check-in date (e.g., 23-09-2024)."
-
-    # Handle check-out date
-    elif state["step"] == "check_out":
-        check_out = extract_date(text)
-        if check_out:
-            state["check_out"] = check_out
-            response = "How many guests will be staying?"
-            state["step"] = "guests"
-        else:
-            response = "Please provide a valid check-out date (e.g., 24-09-2024)."
-
-    # Handle number of guests
-    elif state["step"] == "guests":
-        guests = extract_guests(text)
-        if guests:
-            state["guests"] = guests
-
-            # Store booking in the SQLite database
-            add_booking(user_id, state["check_in"], state["check_out"], state["guests"], state["room_type"], state["room_price"])
-            response = f"Thank you! Your room is booked from {state['check_in']} to {state['check_out']} for {state['guests']} guests in a {state['room_type']} room at ${state['room_price']} per night."
-
-            # Reset the conversation state after successful booking
-            conversation_state[user_id] = {"step": "choose_room", "check_in": None, "check_out": None, "guests": None, "room_type": None, "room_price": None}
-        else:
-            response = "Please provide the number of guests."
-
+    
+    if feedback is not None:
+        response = handle_feedback(feedback, text, state)
+    else:
+        response = generate_response(text, state)
+    
+    # Update the conversation state
+    state['last_input'] = text
+    state['last_response'] = response
+    
+    logging.info(f"User: {text}")
+    logging.info(f"Bot: {response}")
+    
     return jsonify({'response': response})
 
 if __name__ == '__main__':
-    init_db()  # Initialize the database when the app starts
+    init_db()
+    init_model()
     app.run(debug=True, host='0.0.0.0', port=5001)
