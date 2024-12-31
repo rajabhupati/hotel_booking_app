@@ -2,3 +2,6 @@ flask<3.0.0
 nltk==3.9.1
 Flask-Login==0.6.3
 werkzeug>=3.0.0
+spacy
+scikit-learn
+python-dateutil
