@@ -5,119 +5,125 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hotel Booking Chatbot</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-            margin: 0;
-            padding: 0;
-        }
-        #chat-window {
-            margin: 50px auto;
-            width: 400px;
-            background-color: white;
-            padding: 20px;
-            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-        }
-        #messages {
-            border: 1px solid #ddd;
-            padding: 10px;
-            height: 300px;
-            overflow-y: scroll;
-            margin-bottom: 10px;
-        }
-        #user-input {
-            width: calc(100% - 60px);
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-        }
-        button {
-            padding: 10px;
-            margin-left: 10px;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .feedback-buttons {
-            display: inline-block;
-            margin-left: 10px;
-        }
-        .feedback-button {
-            background-color: #f0f0f0;
-            border: 1px solid #ddd;
-            padding: 5px 10px;
-            margin-right: 5px;
-            cursor: pointer;
-        }
+        #feedback-container { display: none; }
     </style>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
-    <div id="chat-window">
-        <h2>Hotel Booking Chatbot</h2>
-        <div id="messages">
-            <p><strong>Bot:</strong> Welcome to the Hotel Booking Service! How can I assist you today?</p>
-        </div>
-        <input type="text" id="user-input" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
-        <button onclick="sendMessage()">Send</button>
+    <h1>Hotel Booking Chatbot</h1>
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <form id="user-id-form">
+            <input type="text" id="user-id-input" placeholder="Enter your user ID (e.g., user_001)" required>
+            <button type="submit">Submit</button>
+        </form>
+        <form id="chat-form" style="display: none;">
+            <input type="text" id="user-input" placeholder="Type your message...">
+            <button type="submit">Send</button>
+        </form>
+    </div>
+
+    <div id="feedback-container">
+        <h2>Feedback</h2>
+        <form id="feedback-form">
+            <input type="hidden" id="user_input" name="user_input">
+            <label for="predicted_intent">Predicted Intent:</label>
+            <input type="text" id="predicted_intent" name="predicted_intent" readonly>
+            <label for="correct_intent">Correct Intent:</label>
+            <select id="correct_intent" name="correct_intent">
+                <option value="book_room">Book Room</option>
+                <option value="extend_stay">Extend Stay</option>
+                <option value="room_info">Room Info</option>
+                <option value="cancel_booking">Cancel Booking</option>
+                <option value="out_of_scope">Out of Scope</option>
+                <option value="multi_room_booking">Multi-Room Booking</option>
+                <option value="user_identification">User Identification</option>
+            </select>
+            <button type="submit">Submit Feedback</button>
+        </form>
     </div>
 
     <script>
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
+        const userIdForm = document.getElementById('user-id-form');
+        const userIdInput = document.getElementById('user-id-input');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const chatMessages = document.getElementById('chat-messages');
+        const feedbackContainer = document.getElementById('feedback-container');
+        const feedbackForm = document.getElementById('feedback-form');
+        let userId = '';
+
+        userIdForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            userId = userIdInput.value.trim();
+            if (userId) {
+                userIdForm.style.display = 'none';
+                chatForm.style.display = 'block';
+                displayMessage('Bot', `Thank you for providing your user ID: ${userId}. How can I assist you today?`);
             }
-        }
+        });
 
-        function sendMessage() {
-            var userMessage = $("#user-input").val().trim();
-            if (userMessage === "") {
-                alert("Please enter a message.");
-                return;
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (message) {
+                displayMessage('You', message);
+                userInput.value = '';
+                
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: message, user_id: userId }),
+                });
+                
+                const data = await response.json();
+                displayMessage('Bot', data.response);
+
+                if (data.requires_feedback) {
+                    showFeedbackForm(message, data.predicted_intent);
+                }
             }
+        });
 
-            $("#messages").append("<p><strong>You:</strong> " + userMessage + "</p>");
-            $("#user-input").val("");
+        feedbackForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(feedbackForm);
+            
+            try {
+                const response = await fetch('/submit_feedback', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            $.ajax({
-                url: "/chat",
-                type: "POST",
-                contentType: "application/json",
-                data: JSON.stringify({ "text": userMessage }),
-                success: function(response) {
-                    var botResponse = "<p><strong>Bot:</strong> " + response.response + 
-                        "<span class='feedback-buttons'>" +
-                        "<button class='feedback-button' onclick='sendFeedback(\"positive\")'>👍</button>" +
-                        "<button class='feedback-button' onclick='sendFeedback(\"negative\")'>👎</button>" +
-                        "</span></p>";
-                    $("#messages").append(botResponse);
-                    $("#messages").scrollTop($("#messages")[0].scrollHeight);
-                },
-                error: function(xhr, status, error) {
-                    $("#messages").append("<p><strong>Bot:</strong> Sorry, there was an error processing your request.</p>");
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            });
+
+                const data = await response.text();
+                feedbackContainer.style.display = 'none';
+                displayMessage('Bot', data);
+            } catch (error) {
+                console.error('Error:', error);
+                displayMessage('Bot', 'An error occurred while submitting feedback. Please try again.');
+            }
+        });
+
+        function displayMessage(sender, message) {
+            const messageElement = document.createElement('p');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        function sendFeedback(feedback) {
-            $.ajax({
-                url: "/chat",
-                type: "POST",
-                contentType: "application/json",
-                data: JSON.stringify({ "feedback": feedback }),
-                success: function(response) {
-                    console.log("Feedback sent:", response);
-                },
-                error: function(xhr, status, error) {
-                    console.error("Error sending feedback:", error);
-                }
-            });
+        function showFeedbackForm(userInput, predictedIntent) {
+            document.getElementById('user_input').value = userInput;
+            document.getElementById('predicted_intent').value = predictedIntent;
+            feedbackContainer.style.display = 'block';
         }
+
+        // Initial bot message
+        displayMessage('Bot', 'Welcome to the Hotel Booking Service! Please enter your user ID to get started.');
     </script>
 </body>
 </html>
