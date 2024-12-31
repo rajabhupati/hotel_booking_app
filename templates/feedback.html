@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Feedback Form</title>
+</head>
+<body>
+    <div id="feedback-section" style="display: none;">
+        <p>It seems there was an issue with the intent detection. Please select the correct intent:</p>
+        <select id="intent-dropdown">
+            <option value="book_room">Book a Room</option>
+            <option value="extend_stay">Extend Stay</option>
+            <option value="room_info">Room Information</option>
+            <option value="cancel_booking">Cancel Booking</option>
+        </select>
+        <input type="hidden" id="user-input" value="">
+        <input type="hidden" id="predicted-intent" value="">
+        <button onclick="submitFeedback()">Submit</button>
+    </div>
+
+    <script>
+        function submitFeedback() {
+            const selectedIntent = document.getElementById('intent-dropdown').value;
+            const userInput = document.getElementById('user-input').value;
+            const predictedIntent = document.getElementById('predicted-intent').value;
+
+            fetch('/submit_feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_input: userInput,
+                    predicted_intent: predictedIntent,
+                    correct_intent: selectedIntent
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  console.log('Feedback submitted:', data);
+                  document.getElementById('feedback-section').style.display = 'none';
+              });
+        }
+
+        function showFeedbackSection(userInput, predictedIntent) {
+            document.getElementById('user-input').value = userInput;
+            document.getElementById('predicted-intent').value = predictedIntent;
+            document.getElementById('feedback-section').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
