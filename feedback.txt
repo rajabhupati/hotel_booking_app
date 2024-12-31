@@ -1,0 +1,4 @@
+2024-12-31 10:15:58	*.*.*.*	I need to clarify if i can book two rooms	book_room	book_room
+2024-12-31 10:30:06	*.*.*.*	I need to clarify if i can book two rooms	book_room	book_room
+2024-12-31 11:07:05	*.*.*.*	I need to clarify if i can extend the rooms	unknown_intent	room_info
+2024-12-31 11:07:05	*.*.*.*	I need to clarify if i can extend the rooms	unknown_intent	room_info
